@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  match /notes/{noteId} {
+   function signedIn() { return request.auth != null; }
+   function valid() { return request.resource.data.title is string && request.resource.data.title.size() <= 100 && request.resource.data.content is string && request.resource.data.content.size() <= 100000; }
+   allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
+   allow create: if signedIn() && request.resource.data.userId == request.auth.uid && valid();
+   allow update: if signedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId && valid();
+  }
+ }
+}

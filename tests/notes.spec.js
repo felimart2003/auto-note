@@ -1,0 +1,23 @@
+const { test, expect } = require('@playwright/test');
+test('create, immediately leave editor, reload, search and delete', async ({page}) => {
+ const errors=[]; page.on('pageerror', e=>errors.push(e.message));
+ await page.goto('./');
+ await page.getByRole('button',{name:'Create note'}).click();
+ await page.getByLabel('Note title').fill('A useful idea');
+ await page.getByLabel('Note content').fill('Keep the last keystroke.');
+ await page.getByText('← Back', {exact:true}).click();
+ await page.screenshot({path: 'docs/notebook.png', fullPage:true});
+ await expect(page.getByText('A useful idea', {exact:true})).toBeVisible();
+ await page.reload();
+ await expect(page.getByText('Keep the last keystroke.', {exact:true})).toBeVisible();
+ await page.getByLabel('Search notes').fill('missing');
+ await expect(page.getByText('A useful idea',{exact:true})).toHaveCount(0);
+ await page.getByLabel('Search notes').fill('useful');
+ await expect(page.getByText('A useful idea',{exact:true})).toBeVisible();
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ page.on('dialog',dialog=>dialog.accept());
+ await page.getByLabel('Delete note').click();
+ await expect(page.getByText('No notes yet',{exact:true})).toBeVisible();
+ expect(errors).toEqual([]);
+});

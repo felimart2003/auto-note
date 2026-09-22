@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   FlatList,
   TouchableOpacity,
   StyleSheet,
@@ -10,15 +11,17 @@ import {
 } from "react-native";
 import { subscribeToNotes, createNote, deleteNote } from "../services/noteService";
 import { logoutUser } from "../services/authService";
-import { auth } from "../config/firebase";
+import { auth, isDemo } from "../config/firebase";
 
 export default function NotesListScreen({ navigation }) {
+  const [search, setSearch] = useState("");
+  const [error, setError] = useState("");
   const [notes, setNotes] = useState([]);
 
   useEffect(() => {
     const userId = auth.currentUser?.uid;
     if (!userId) return;
-    const unsubscribe = subscribeToNotes(userId, setNotes);
+    const unsubscribe = subscribeToNotes(userId, setNotes, () => setError("Unable to load notes. Check connection and configuration."));
     return () => unsubscribe();
   }, []);
 
@@ -29,7 +32,7 @@ export default function NotesListScreen({ navigation }) {
       const noteId = await createNote(userId);
       navigation.navigate("Editor", { noteId });
     } catch (err) {
-      console.error("Failed to create note:", err);
+      setError("Could not create note. Your storage may be full.");
     }
   };
 
@@ -38,7 +41,7 @@ export default function NotesListScreen({ navigation }) {
       try {
         await deleteNote(noteId);
       } catch (err) {
-        console.error("Failed to delete note:", err);
+        setError("Could not delete note. Please try again.");
       }
     };
 
@@ -73,7 +76,7 @@ export default function NotesListScreen({ navigation }) {
           {item.title || "Untitled Note"}
         </Text>
         <TouchableOpacity
-          onPress={() => handleDeleteNote(item.id)}
+          accessibilityLabel="Delete note" onPress={(event) => { event.stopPropagation(); handleDeleteNote(item.id); }}
           style={styles.deleteBtn}
         >
           <Text style={styles.deleteBtnText}>✕</Text>
@@ -93,11 +96,15 @@ export default function NotesListScreen({ navigation }) {
     <View style={styles.container}>
       <View style={styles.topBar}>
         <Text style={styles.title}>AutoNote</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+        {Platform.OS === "web" && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Export notes" onPress={() => { const blob = new Blob([JSON.stringify(notes, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "autonote-backup.json"; link.click(); URL.revokeObjectURL(url); }} style={styles.logoutBtn}><Text style={{ color: "#b9d2ff" }}>Export notes</Text></TouchableOpacity>}
+        {!isDemo && <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
           <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
       </View>
 
+      <Text style={{ color: "#a5b4cc", padding: 20 }}>{isDemo ? "Your private notebook · Saved only on this device" : "Your thoughts, synced and timestamped"}</Text>
+      {error ? <Text accessibilityRole="alert" style={{ color: "#ff9999", padding: 16 }}>{error}</Text> : null}
+      <TextInput accessibilityLabel="Search notes" placeholder="Search your notes" placeholderTextColor="#94a3b8" value={search} onChangeText={setSearch} style={{ color: "white", padding: 16, marginHorizontal: 16, backgroundColor: "#1a2233", borderRadius: 12 }} />
       {notes.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📝</Text>
@@ -108,7 +115,7 @@ export default function NotesListScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={notes}
+          data={notes.filter(n => `${n.title} ${n.content}`.toLowerCase().includes(search.toLowerCase()))}
           keyExtractor={(item) => item.id}
           renderItem={renderNote}
           contentContainerStyle={styles.list}
@@ -116,7 +123,7 @@ export default function NotesListScreen({ navigation }) {
         />
       )}
 
-      <TouchableOpacity style={styles.fab} onPress={handleNewNote}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Create note" style={styles.fab} onPress={handleNewNote}>
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
     </View>
@@ -126,7 +133,10 @@ export default function NotesListScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f0f0f",
+    backgroundColor: "#101724",
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
   },
   topBar: {
     flexDirection: "row",

@@ -9,9 +9,7 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../config/firebase";
-import { updateNote } from "../services/noteService";
+import { getNote, updateNote } from "../services/noteService";
 
 export default function NoteEditorScreen({ route, navigation }) {
   const { noteId } = route.params;
@@ -20,22 +18,30 @@ export default function NoteEditorScreen({ route, navigation }) {
   const [dateLabel, setDateLabel] = useState("");
   const [timeLabel, setTimeLabel] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState("Saved");
+  const draftRef = useRef(null);
   const saveTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const guard = event => { if (draftRef.current) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, []);
 
   // Load the note data on mount
   useEffect(() => {
     const loadNote = async () => {
       try {
-        const noteDoc = await getDoc(doc(db, "notes", noteId));
-        if (noteDoc.exists()) {
-          const data = noteDoc.data();
+        const data = await getNote(noteId);
+        if (data) {
           setTitle(data.title || "");
           setContent(data.content || "");
           setDateLabel(data.dateLabel || "");
           setTimeLabel(data.timeLabel || "");
         }
       } catch (err) {
-        console.error("Failed to load note:", err);
+        setStatus("Could not load note. Go back and try again.");
       } finally {
         setLoaded(true);
       }
@@ -43,18 +49,22 @@ export default function NoteEditorScreen({ route, navigation }) {
     loadNote();
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (draftRef.current) updateNote(noteId, draftRef.current).catch(() => {});
     };
   }, [noteId]);
 
   // Auto-save with debounce (saves 800ms after you stop typing)
   const debounceSave = useCallback(
     (newTitle, newContent) => {
+      draftRef.current = { title: newTitle, content: newContent };
+      setStatus("Saving…");
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(async () => {
         try {
           await updateNote(noteId, { title: newTitle, content: newContent });
+          if (draftRef.current?.title === newTitle && draftRef.current?.content === newContent) { draftRef.current = null; setStatus("Saved"); }
         } catch (err) {
-          console.error("Auto-save failed:", err);
+          setStatus("Save failed — press Back to retry before leaving.");
         }
       }, 800);
     },
@@ -86,11 +96,11 @@ export default function NoteEditorScreen({ route, navigation }) {
     >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={async () => { clearTimeout(saveTimerRef.current); try { if (draftRef.current) { await updateNote(noteId, draftRef.current); draftRef.current = null; } navigation.goBack(); } catch { setStatus("Save failed. Please try again."); } }} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.headerMeta}>
-          <Text style={styles.autoSaveLabel}>Auto-saving</Text>
+          <Text style={styles.autoSaveLabel}>{status}</Text>
         </View>
       </View>
 
@@ -106,6 +116,7 @@ export default function NoteEditorScreen({ route, navigation }) {
           style={styles.titleInput}
           placeholder="Note title..."
           placeholderTextColor="#555"
+          accessibilityLabel="Note title"
           value={title}
           onChangeText={handleTitleChange}
           maxLength={100}
@@ -116,6 +127,8 @@ export default function NoteEditorScreen({ route, navigation }) {
           style={styles.contentInput}
           placeholder="Start writing..."
           placeholderTextColor="#444"
+          accessibilityLabel="Note content"
+          maxLength={100000}
           value={content}
           onChangeText={handleContentChange}
           multiline
@@ -130,7 +143,10 @@ export default function NoteEditorScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f0f0f",
+    backgroundColor: "#101724",
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
   },
   center: {
     alignItems: "center",
@@ -164,7 +180,7 @@ const styles = StyleSheet.create({
   },
   autoSaveLabel: {
     fontSize: 12,
-    color: "#555",
+    color: "#94a3b8",
     fontStyle: "italic",
   },
   editorScroll: {
