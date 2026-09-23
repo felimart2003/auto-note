@@ -29,6 +29,9 @@
     },
     "experiments": {
       "baseUrl": "/auto-note"
-    }
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
   }
 }

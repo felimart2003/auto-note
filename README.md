@@ -49,4 +49,4 @@ GitHub Pages hosts the free static web export. `.github/workflows/pages.yml` ins
 
 ## Security and limits
 
-No credentials are committed. Dependency updates reduced the initial audit findings. Remaining high/moderate advisories in Expo/Metro image parsing and native build tooling require a separately tested Expo major upgrade. The static demo does not accept uploaded build assets or expose these development tools. Firebase rules must be deployed before exposing a configured cloud instance. Local data belongs to this browser/device and is not shared between visitors.
+No credentials are committed. Expo SDK 57 and aligned React/native dependencies pass the production web build and browser regression test. `npm audit` reports zero vulnerabilities. A narrowly scoped xcode → uuid override retains the CommonJS v4 API, with an explicit UUID compatibility check. Firebase rules must be deployed before exposing a configured cloud instance. Local data belongs to this browser/device and is not shared between visitors.
